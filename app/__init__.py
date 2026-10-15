@@ -1,0 +1,1 @@
+"""Minzo Africa AI service."""
