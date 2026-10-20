@@ -45,7 +45,9 @@ AssistantPayload = Annotated[
     summary="Ask the Minzo assistant",
     description=(
         "Returns one structured JSON response. Use this endpoint in Swagger and for "
-        "flows that can propose or execute a confirmed action."
+        "read-only questions. An optional user Authorization bearer header enables "
+        "personal profile and review tools after Backend verifies it. "
+        "The X-Service-Key header remains required. This assistant cannot change records."
     ),
 )
 async def assistant_message(
@@ -61,7 +63,7 @@ async def assistant_message(
     summary="Stream a Minzo assistant response",
     description=(
         "Streams Server-Sent Events (SSE). Event types are `start`, `token`, "
-        "`proposed_action`, `done`, and `error`. Swagger can issue the request, but "
+        "`done`, and `error`. Swagger can issue the request, but "
         "a frontend Fetch stream or `curl -N` displays tokens progressively."
     ),
     responses={

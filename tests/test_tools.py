@@ -4,6 +4,7 @@ import pytest
 from pydantic import SecretStr
 
 from app.assistant.tools import build_tools
+from app.clients.express_api import ExpressApiError
 from app.schemas.assistant import AssistantPrincipal, SendBusinessMessageAction
 
 
@@ -67,7 +68,7 @@ def test_write_tools_are_disabled_by_default() -> None:
 
 
 @pytest.mark.asyncio
-async def test_confirmed_message_tool_is_bound_to_exact_action() -> None:
+async def test_write_tool_is_unavailable_even_with_delegation() -> None:
     api = FakeExpressApi()
     principal = AssistantPrincipal(
         user_id="user-1",
@@ -79,15 +80,51 @@ async def test_confirmed_message_tool_is_bound_to_exact_action() -> None:
         message="Please call me.",
         idempotency_key="message-12345",
     )
-    tools = build_tools(api, principal, action)
-    send_tool = next(tool for tool in tools if tool.name == "send_confirmed_message_to_business")
+    with pytest.raises(ValueError, match="read-only"):
+        build_tools(api, principal, action)
+    assert api.sent_message is None
 
-    result = json.loads(await send_tool.ainvoke({}))
 
-    assert result == {"sent": True}
-    assert api.sent_message == {
-        "token": "delegation-token",
-        "businessId": "business-1",
-        "message": "Please call me.",
-        "idempotencyKey": "message-12345",
-    }
+@pytest.mark.parametrize("search", ["", " ", "a", " a "])
+async def test_empty_or_short_catalogue_search_returns_corrective_tool_feedback(search):
+    class NoCallApi(FakeExpressApi):
+        async def search_counties(self, search, *, limit):
+            pytest.fail("Invalid search must not reach Backend")
+
+    tools = build_tools(NoCallApi(), AssistantPrincipal(), None)
+    lookup = next(t for t in tools if t.name == "search_county_catalogue")
+    result = await lookup.ainvoke({"search": search})
+    assert "Invalid tool arguments" in result
+    assert "search_business_directory" in result
+
+
+@pytest.mark.parametrize("status", [400, 404, 422])
+async def test_backend_argument_errors_are_recoverable_tool_results(status):
+    class RejectedApi(FakeExpressApi):
+        async def search_businesses(self, **filters):
+            raise ExpressApiError("GET /api/v1/businesses", status)
+
+    tools = build_tools(RejectedApi(), AssistantPrincipal(), None)
+    search = next(t for t in tools if t.name == "search_business_directory")
+    result = await search.ainvoke({})
+    assert "temporarily unavailable" not in result
+    assert "rejected" in result or "not found" in result
+
+
+async def test_real_backend_failure_is_not_misrepresented_as_empty_results():
+    class FailedApi(FakeExpressApi):
+        async def search_businesses(self, **filters):
+            raise ExpressApiError("GET /api/v1/businesses", 503)
+
+    tools = build_tools(FailedApi(), AssistantPrincipal(), None)
+    search = next(t for t in tools if t.name == "search_business_directory")
+    with pytest.raises(ExpressApiError):
+        await search.ainvoke({})
+
+
+async def test_general_discovery_can_be_called_without_search_text():
+    tools = build_tools(FakeExpressApi(), AssistantPrincipal(), None)
+    search = next(t for t in tools if t.name == "search_business_directory")
+    result = json.loads(await search.ainvoke({}))
+    assert result["search"] is None
+    assert result["city"] is None

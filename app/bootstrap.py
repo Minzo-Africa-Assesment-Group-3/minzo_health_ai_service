@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from app.api.errors import register_exception_handlers
 from app.api.router import root_router
 from app.clients.express_api import ExpressApiClient
+from app.clients.moderation_api import ModerationApiClient
 from app.core.config import get_settings
 
 
@@ -23,6 +24,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             else None
         )
         app.state.express_api = ExpressApiClient(http_client, token)
+        app.state.moderation_callback = ModerationApiClient(
+            http_client,
+            settings.ai_moderation_service_key.get_secret_value().strip()
+            if settings.ai_moderation_service_key
+            else None,
+        )
         yield
 
 

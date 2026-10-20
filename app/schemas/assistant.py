@@ -59,7 +59,7 @@ class ProposedBusinessMessageAction(StrictModel):
 
 class AssistantAgentOutput(StrictModel):
     answer: str = Field(min_length=1, max_length=10_000)
-    proposed_action: ProposedBusinessMessageAction | None = None
+    proposed_action: None = None
 
 
 class AssistantRequest(StrictModel):
@@ -80,14 +80,16 @@ class AssistantRequest(StrictModel):
 
     @model_validator(mode="after")
     def validate_confirmed_action(self) -> "AssistantRequest":
-        if self.confirmed_action is not None and (
-            "send_business_message" not in self.principal.capabilities
+        if (
+            self.confirmed_action is not None
+            or self.principal.capabilities
+            or self.principal.delegation_token is not None
         ):
-            raise ValueError("confirmed action is not permitted by the trusted principal context")
+            raise ValueError("The assistant is read-only; write actions are not supported.")
         return self
 
 
 class AssistantResponse(StrictModel):
     conversation_id: str
     answer: str
-    proposed_action: ProposedBusinessMessageAction | None = None
+    proposed_action: None = None

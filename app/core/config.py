@@ -15,6 +15,7 @@ class Settings(BaseSettings):
 
     express_api_base_url: str = "http://127.0.0.1:3000"
     express_service_token: SecretStr | None = None
+    ai_moderation_service_key: SecretStr | None = None
     express_request_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
 
     moderation_policy_version: str = "2026-10-15"

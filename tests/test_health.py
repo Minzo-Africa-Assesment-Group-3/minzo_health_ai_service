@@ -21,3 +21,4 @@ def test_swagger_and_streaming_endpoint_are_exposed() -> None:
     paths = openapi_response.json()["paths"]
     assert "/v1/assistant/messages" in paths
     assert "/v1/assistant/messages/stream" in paths
+    assert "/v1/moderation/customer-reviews/evaluate" in paths

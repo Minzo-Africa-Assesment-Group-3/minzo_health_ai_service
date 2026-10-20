@@ -1,6 +1,11 @@
+import logging
 from typing import Any
+from urllib.parse import quote
 
 import httpx
+from pydantic import SecretStr
+
+logger = logging.getLogger(__name__)
 
 
 class ExpressApiError(RuntimeError):
@@ -27,6 +32,11 @@ class ExpressApiClient:
         self._client = client
         self._service_token = service_token
 
+    def for_user(self, token: SecretStr):
+        from app.clients.current_user_api import CurrentUserApiClient
+
+        return CurrentUserApiClient(self._client, token)
+
     def _headers(
         self,
         *,
@@ -48,14 +58,19 @@ class ExpressApiClient:
                 return {"ok": True}
             return response.json()
         except httpx.HTTPStatusError as exc:
+            logger.warning(
+                "Backend request rejected: %s %s returned HTTP %s",
+                method, path, exc.response.status_code,
+            )
             raise ExpressApiError(f"{method} {path}", exc.response.status_code) from exc
         except (httpx.HTTPError, ValueError) as exc:
+            logger.warning("Backend request failed: %s %s (%s)", method, path, type(exc).__name__)
             raise ExpressApiError(f"{method} {path}") from exc
 
     async def get_business(self, business_slug: str) -> Any:
         return await self._request(
             "GET",
-            f"/api/v1/businesses/{business_slug}",
+            f"/api/v1/businesses/{quote(business_slug, safe='')}",
             headers=self._headers(),
         )
 
@@ -74,7 +89,7 @@ class ExpressApiClient:
         page_size: int = 10,
     ) -> Any:
         params: dict[str, str | int | float] = {
-            "page": max(1, page),
+            "pageNumber": max(1, page),
             "pageSize": _bounded_limit(page_size, maximum=50),
         }
         optional_params = {
@@ -100,9 +115,9 @@ class ExpressApiClient:
     ) -> Any:
         return await self._request(
             "GET",
-            f"/api/v1/businesses/{business_id}/reviews",
+            f"/api/v1/businesses/{quote(business_id, safe='')}/reviews",
             params={
-                "page": max(1, page),
+                "pageNumber": max(1, page),
                 "pageSize": _bounded_limit(page_size, maximum=50),
             },
             headers=self._headers(),
@@ -111,7 +126,7 @@ class ExpressApiClient:
     async def get_business_rating(self, business_id: str) -> Any:
         return await self._request(
             "GET",
-            f"/api/v1/businesses/{business_id}/rating",
+            f"/api/v1/businesses/{quote(business_id, safe='')}/rating",
             headers=self._headers(),
         )
 

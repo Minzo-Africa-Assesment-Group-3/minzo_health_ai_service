@@ -7,8 +7,10 @@ from langchain.agents import create_agent
 from langchain_core.messages import AIMessage
 from langchain_openai import ChatOpenAI
 
+from app.assistant.current_user_tools import build_current_user_tools
 from app.assistant.prompts import SYSTEM_PROMPT
 from app.assistant.tools import build_tools
+from app.clients.current_user_api import CurrentUserApiClient
 from app.clients.express_api import ExpressApiClient
 from app.schemas.assistant import (
     AssistantAgentOutput,
@@ -20,9 +22,13 @@ logger = logging.getLogger(__name__)
 
 
 class AssistantService:
-    def __init__(self, model: ChatOpenAI, express_api: ExpressApiClient) -> None:
+    def __init__(
+        self, model: ChatOpenAI, express_api: ExpressApiClient,
+        *, current_user_api: CurrentUserApiClient | None = None,
+    ) -> None:
         self._model = model
         self._express_api = express_api
+        self._current_user_api = current_user_api
 
     async def respond(self, request: AssistantRequest) -> AssistantResponse:
         agent, messages = self._create_agent_run(request)
@@ -71,12 +77,7 @@ class AssistantService:
                 if decoded_text:
                     yield {"type": "token", "text": decoded_text}
 
-            output = AssistantAgentOutput.model_validate_json("".join(raw_output))
-            if output.proposed_action is not None:
-                yield {
-                    "type": "proposed_action",
-                    "action": output.proposed_action.model_dump(mode="json"),
-                }
+            AssistantAgentOutput.model_validate_json("".join(raw_output))
             yield {"type": "done", "conversationId": request.conversation_id}
         except Exception:
             logger.exception(
@@ -89,12 +90,19 @@ class AssistantService:
             }
 
     def _create_agent_run(self, request: AssistantRequest) -> tuple[Any, list[dict[str, str]]]:
-        tools = build_tools(
+        tools = list(build_tools(
             self._express_api,
             request.principal,
             request.confirmed_action,
-        )
+        ))
+        if self._current_user_api is not None:
+            tools.extend(build_current_user_tools(self._current_user_api))
         trusted_context = _trusted_context(request)
+        trusted_context += (
+            "\nThe user is signed in. Personal read-only profile and review tools are available."
+            if self._current_user_api is not None
+            else "\nThe user is anonymous. Ask them to sign in for their personal information."
+        )
         agent = create_agent(
             model=self._model,
             tools=tools,
@@ -198,13 +206,7 @@ def _trusted_context(request: AssistantRequest) -> str:
             lines.append(f"Trusted current business ID: {request.business_context.business_id}")
         if request.business_context.business_slug:
             lines.append(f"Trusted current business slug: {request.business_context.business_slug}")
-    if request.confirmed_action is not None:
-        lines.append(
-            "A server-verified business-message action has been confirmed. "
-            "Invoke send_confirmed_message_to_business exactly once."
-        )
-    else:
-        lines.append("No write action has been confirmed for this request.")
+    lines.append("All tools are read-only. Body principal identifiers do not establish identity.")
     return "\n".join(lines)
 
 
