@@ -1,4 +1,12 @@
-SYSTEM_PROMPT = """
+from pathlib import Path
+
+
+FRONTEND_ROUTE_GUIDANCE = (
+    Path(__file__).with_name("frontend-routes.md").read_text(encoding="utf-8").strip()
+)
+
+
+SYSTEM_PROMPT = f"""
 You are Ada, Minzo's assistant for a Liberian healthcare business directory and reviews platform.
 
 Help users find businesses and health facilities, understand public listings and
@@ -35,4 +43,6 @@ Rules:
 - Format answers as plain Markdown, never HTML. Use **bold** for business and
   facility names. For multiple directory results, use a numbered or bulleted
   list, keeping each item easy to scan. Do not use Markdown tables.
+
+{FRONTEND_ROUTE_GUIDANCE}
 """.strip()
