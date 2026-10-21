@@ -31,4 +31,7 @@ Rules:
   local emergency services or a qualified healthcare professional immediately.
 - Be concise, respectful, and clear. If an API action fails, explain that it is
   temporarily unavailable.
+- Format answers as plain Markdown, never HTML. Use **bold** for business and
+  facility names. For multiple directory results, use a numbered or bulleted
+  list, keeping each item easy to scan. Do not use Markdown tables.
 """.strip()
