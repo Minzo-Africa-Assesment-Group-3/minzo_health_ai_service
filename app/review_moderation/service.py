@@ -77,9 +77,15 @@ def enforce_moderation_policy(
     """Apply deterministic guardrails to a model-proposed moderation decision."""
 
     has_policy_signal = decision.categories != ["none"]
+    has_immediate_rejection_signal = any(
+        category in {"harassment", "hate", "profanity", "threat"}
+        for category in decision.categories
+    )
     action = decision.action
 
-    if decision.requires_human_review or decision.confidence < flag_confidence_threshold:
+    if has_immediate_rejection_signal:
+        action = "block"
+    elif decision.requires_human_review or decision.confidence < flag_confidence_threshold:
         action = "flag"
     elif action == "block" and (
         decision.confidence < block_confidence_threshold or decision.severity != "high"

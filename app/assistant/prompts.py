@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 FRONTEND_ROUTE_GUIDANCE = (
     Path(__file__).with_name("frontend-routes.md").read_text(encoding="utf-8").strip()
 )

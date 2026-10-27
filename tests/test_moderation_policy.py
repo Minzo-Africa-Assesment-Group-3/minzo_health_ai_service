@@ -30,7 +30,7 @@ def test_low_confidence_decision_is_escalated() -> None:
     assert result.requires_human_review is True
 
 
-def test_block_requires_high_severity_and_confidence() -> None:
+def test_harassment_is_rejected_without_human_review() -> None:
     result = _enforce(
         _decision(
             is_abusive=True,
@@ -40,7 +40,23 @@ def test_block_requires_high_severity_and_confidence() -> None:
             confidence=0.99,
         )
     )
-    assert result.action == "flag"
+    assert result.action == "block"
+    assert result.requires_human_review is False
+
+
+def test_profanity_is_rejected_without_human_review() -> None:
+    result = _enforce(
+        _decision(
+            is_abusive=True,
+            action="flag",
+            categories=["profanity"],
+            severity="low",
+            confidence=0.7,
+        )
+    )
+
+    assert result.action == "block"
+    assert result.requires_human_review is False
 
 
 def test_high_confidence_severe_block_is_preserved() -> None:
@@ -57,7 +73,7 @@ def test_high_confidence_severe_block_is_preserved() -> None:
     assert result.requires_human_review is False
 
 
-def test_model_cannot_allow_meaningful_abuse_signal() -> None:
+def test_model_cannot_allow_hate_content() -> None:
     result = _enforce(
         _decision(
             action="allow",
@@ -66,5 +82,5 @@ def test_model_cannot_allow_meaningful_abuse_signal() -> None:
             confidence=0.99,
         )
     )
-    assert result.action == "flag"
+    assert result.action == "block"
     assert result.is_abusive is True
